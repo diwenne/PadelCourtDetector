@@ -28,10 +28,10 @@ app.add_middleware(
 )
 
 # Initialize Predictor
-MODEL_PATH = 'exps/padel_v2/model_best.pt'
+MODEL_PATH = 'exps/padel_v2/model_best.onnx'
 if not os.path.exists(MODEL_PATH):
-    # Fallback to padel_v1 if v2 doesn't exist yet
-    MODEL_PATH = 'exps/padel_v1/model_best.pt'
+    # Fallback or error
+    MODEL_PATH = 'exps/padel_v2/model_best.onnx'
 
 predictor = None
 

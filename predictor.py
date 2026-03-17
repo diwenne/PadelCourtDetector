@@ -1,34 +1,21 @@
-import torch
 import cv2
 import numpy as np
 import os
-from tracknet import BallTrackerNet
+import onnxruntime as ort
 from postprocess import postprocess
 
 class PadelPredictor:
     def __init__(self, model_path, device=None):
-        if device is None:
-            self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        else:
-            self.device = device
-            
         self.kp_names = ['tol', 'tor', 'point_7', 'point_9', 'center']
         self.input_w, self.input_h = 1920, 1088
         self.scale = 2
         self.out_w, self.out_h = self.input_w // self.scale, self.input_h // self.scale
         
-        self.model = self._load_model(model_path)
-        
-    def _load_model(self, model_path):
-        model = BallTrackerNet(out_channels=5)
-        ckpt = torch.load(model_path, map_location=self.device)
-        if isinstance(ckpt, dict) and 'model_state_dict' in ckpt:
-            model.load_state_dict(ckpt['model_state_dict'])
-        else:
-            model.load_state_dict(ckpt)
-        model = model.to(self.device)
-        model.eval()
-        return model
+        # Initialize ONNX session
+        print(f"Initializing ONNX InferenceSession for {model_path}")
+        self.sess = ort.InferenceSession(model_path, providers=['CPUExecutionProvider'])
+        self.input_name = self.sess.get_inputs()[0].name
+        self.output_name = self.sess.get_outputs()[0].name
 
     def predict(self, img):
         """
@@ -41,12 +28,13 @@ class PadelPredictor:
         img_resized = cv2.resize(img, (self.out_w, self.out_h))
         inp = (img_resized.astype(np.float32) / 255.)
         inp = np.rollaxis(inp, 2, 0)
-        inp = torch.tensor(inp).unsqueeze(0).float().to(self.device)
+        inp = np.expand_dims(inp, axis=0).astype(np.float32)
         
         # Inference
-        with torch.no_grad():
-            out = self.model(inp)
-        pred = torch.sigmoid(out).cpu().numpy()[0]
+        out = self.sess.run([self.output_name], {self.input_name: inp})[0]
+        
+        # Apply Sigmoid manually in numpy
+        pred = 1 / (1 + np.exp(-out[0]))
         
         # Postprocess
         results = []
@@ -66,7 +54,7 @@ class PadelPredictor:
 
 if __name__ == "__main__":
     # Quick test
-    predictor = PadelPredictor('exps/padel_v2/model_last.pt')
+    predictor = PadelPredictor('exps/padel_v2/model_best.onnx')
     dummy_img = np.zeros((1080, 1920, 3), dtype=np.uint8)
     res = predictor.predict(dummy_img)
     print(res)

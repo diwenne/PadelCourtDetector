@@ -13,11 +13,6 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install python packages optimizing for CPU
-# Standard Fly.io nodes do NOT have GPUs; running on CPU is completely fine for single frames
-RUN pip install --no-cache-dir \
-    torch torchvision \
-    --index-url https://download.pytorch.org/whl/cpu
-
 RUN pip install --no-cache-dir \
     fastapi \
     uvicorn \
@@ -25,7 +20,8 @@ RUN pip install --no-cache-dir \
     opencv-python-headless \
     scipy \
     python-multipart \
-    sympy
+    sympy \
+    onnxruntime
 
 # Copy weights inside container (relative to context)
 COPY exps/ /app/exps/
