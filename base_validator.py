@@ -8,11 +8,10 @@ from tracknet import BallTrackerNet
 import argparse
 import torch.nn as nn
 
-def val(model, val_loader, criterion, device, epoch, output_width=1280, output_height=720):
+def val(model, val_loader, criterion, device, epoch, output_width=1280, output_height=720, max_dist=7):
     model.eval()
     losses = []
     tp, fp, fn, tn = 0, 0, 0, 0
-    max_dist = 7
     for iter_id, batch in enumerate(val_loader):
         with torch.no_grad():
             batch_size = batch[0].shape[0]
