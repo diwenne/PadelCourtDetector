@@ -13,7 +13,12 @@ class PadelPredictor:
         
         # Initialize ONNX session
         print(f"Initializing ONNX InferenceSession for {model_path}")
-        self.sess = ort.InferenceSession(model_path, providers=['CPUExecutionProvider'])
+        sess_options = ort.SessionOptions()
+        sess_options.enable_cpu_mem_arena = False  # Critical for preventing 1.9GB RAM spike
+        sess_options.intra_op_num_threads = 2
+        sess_options.inter_op_num_threads = 2
+        
+        self.sess = ort.InferenceSession(model_path, sess_options, providers=['CPUExecutionProvider'])
         self.input_name = self.sess.get_inputs()[0].name
         self.output_name = self.sess.get_outputs()[0].name
 
