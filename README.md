@@ -24,8 +24,9 @@ Based on: [TennisCourtDetector](https://github.com/yastrebksv/TennisCourtDetecto
 ---
 
 ## Model Metadata
-- **Validation Accuracy**: 95.08%
-- **Accuracy Metric**: Percentage of Correct Keypoints (PCK) within a **7-pixel** radius threshold.
+- **Validation Accuracy**: 95.09% (@ 7px radius threshold)
+- **Validation Accuracy @ 10px**: 97.48%
+- **Validation Accuracy @ 15px**: 98.61%
 - **Training Duration**: 245 Epochs
 - **Dataset Volume**: ~38,200 frames
 - **Architecture**: Modified TrackNet (Single-frame heatmap)
