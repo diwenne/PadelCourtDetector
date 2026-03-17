@@ -13,6 +13,16 @@ Based on: [TennisCourtDetector](https://github.com/yastrebksv/TennisCourtDetecto
 
 ---
 
+## Pipeline Workflow
+1. **Decode**: API receives image and reads into buffer (`cv2.imdecode`).
+2. **Preprocess**: Resizes image to `960x544`, normalizes array to `[0, 1]`, and expands to batch dimensions.
+3. **Inference**: Runs via `onnxruntime.InferenceSession` across safe core buckets.
+4. **Postprocess**: Applies manual sigmoid layout, extracts heatmap maximum-peaks per channel.
+5. **Coordinate Scaling**: Adjusts prediction back into uploaded image dimensions.
+6. **Response**: Dispatches JSON coordinate coordinates list.
+
+---
+
 ## Installation
 
 ```bash
