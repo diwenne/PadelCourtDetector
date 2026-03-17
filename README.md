@@ -23,6 +23,14 @@ Based on: [TennisCourtDetector](https://github.com/yastrebksv/TennisCourtDetecto
 
 ---
 
+## Model Metadata
+- **Validation Accuracy**: 95.08%
+- **Training Duration**: 245 Epochs
+- **Dataset Volume**: ~38,200 frames
+- **Architecture**: Modified TrackNet (Single-frame heatmap)
+
+---
+
 ## Installation
 
 ```bash
