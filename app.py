@@ -1,11 +1,17 @@
+print("DEBUG: app.py top-start", flush=True)
 from fastapi import FastAPI, File, UploadFile, HTTPException
+print("DEBUG: fastapi imported", flush=True)
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+print("DEBUG: uvicorn imported", flush=True)
 import cv2
+print("DEBUG: cv2 imported", flush=True)
 import numpy as np
 import io
-from predictor import PadelPredictor
 import os
+print("DEBUG: standard modules imported", flush=True)
+from predictor import PadelPredictor
+print("DEBUG: predictor imported", flush=True)
 
 app = FastAPI(
     title="Padel Court Detector API",
@@ -27,8 +33,19 @@ if not os.path.exists(MODEL_PATH):
     # Fallback to padel_v1 if v2 doesn't exist yet
     MODEL_PATH = 'exps/padel_v1/model_best.pt'
 
-print(f"Loading model from: {MODEL_PATH}")
-predictor = PadelPredictor(MODEL_PATH)
+predictor = None
+
+def get_predictor():
+    global predictor
+    if predictor is None:
+        print(f"Loading model from: {MODEL_PATH}")
+        predictor = PadelPredictor(MODEL_PATH)
+    return predictor
+
+@app.on_event("startup")
+async def startup():
+    print("Pre-loading model on startup...")
+    get_predictor()
 
 @app.get("/")
 async def root():
@@ -50,7 +67,8 @@ async def predict(file: UploadFile = File(...)):
     
     # Run prediction
     try:
-        results = predictor.predict(img)
+        pred = get_predictor()
+        results = pred.predict(img)
         return {
             "filename": file.filename,
             "results": results

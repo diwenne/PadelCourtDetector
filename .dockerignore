@@ -1,6 +1,7 @@
 # flyctl launch added from .gitignore
 # Data & models
 **/*.pt
+!exps/padel_v2/model_best.pt
 **/data
 **/court-keypoints-dataset
 

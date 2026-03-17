@@ -24,13 +24,14 @@ RUN pip install --no-cache-dir \
     numpy \
     opencv-python-headless \
     scipy \
-    python-multipart
+    python-multipart \
+    sympy
 
 # Copy weights inside container (relative to context)
 COPY exps/ /app/exps/
 
 # Copy necessary code files
-COPY app.py predictor.py tracknet.py postprocess.py ./
+COPY app.py predictor.py tracknet.py postprocess.py utils.py ./
 
 EXPOSE 8000
 
