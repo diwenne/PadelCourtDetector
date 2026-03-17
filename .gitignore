@@ -16,7 +16,13 @@ __pycache__/
 .DS_Store
 
 # Tensorboard
-exps/*/plots/
-
 # Temp
 *.log
+
+# Results & Backups
+validation_results/
+inference_results/
+validation_results_*/
+inference_results_*/
+exps/
+

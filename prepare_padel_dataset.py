@@ -105,13 +105,27 @@ def process_dataset(input_dir, output_dir, train_ratio=0.9):
     print(f"\nTotal valid samples: {len(samples)}")
     print(f"Image sizes found: {image_sizes}")
     
-    # Shuffle and split
-    random.seed(42)
-    random.shuffle(samples)
+    # Group samples by video UUID (split by video, not by frame)
+    from collections import defaultdict
+    uuid_to_samples = defaultdict(list)
+    for s in samples:
+        # ID format: "UUID_frame_XX" — extract UUID
+        uuid = s['id'].rsplit('_frame_', 1)[0]
+        uuid_to_samples[uuid].append(s)
     
-    split_idx = int(len(samples) * train_ratio)
-    train_data = samples[:split_idx]
-    val_data = samples[split_idx:]
+    uuids = list(uuid_to_samples.keys())
+    random.seed(42)
+    random.shuffle(uuids)
+    
+    split_idx = int(len(uuids) * train_ratio)
+    train_uuids = set(uuids[:split_idx])
+    val_uuids = set(uuids[split_idx:])
+    
+    train_data = [s for uuid in train_uuids for s in uuid_to_samples[uuid]]
+    val_data = [s for uuid in val_uuids for s in uuid_to_samples[uuid]]
+    
+    print(f"\nSplit by video: {len(train_uuids)} train UUIDs, {len(val_uuids)} val UUIDs")
+    print(f"Train frames: {len(train_data)}, Val frames: {len(val_data)}")
     
     # Save JSON files
     train_path = output_path / 'data_train.json'
@@ -123,7 +137,7 @@ def process_dataset(input_dir, output_dir, train_ratio=0.9):
     with open(val_path, 'w') as f:
         json.dump(val_data, f)
     
-    print(f"\nSaved {len(train_data)} training samples to {train_path}")
+    print(f"Saved {len(train_data)} training samples to {train_path}")
     print(f"Saved {len(val_data)} validation samples to {val_path}")
     
     return train_data, val_data, image_sizes

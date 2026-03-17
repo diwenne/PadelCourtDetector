@@ -22,6 +22,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_epochs', type=int, default=100, help='total training epochs')
     parser.add_argument('--lr', type=float, default=1e-4, help='learning rate')
     parser.add_argument('--val_intervals', type=int, default=5, help='epochs between validation')
+    parser.add_argument('--patience', type=int, default=30, help='early stopping patience (in epochs)')
     parser.add_argument('--steps_per_epoch', type=int, default=500, help='steps per epoch')
     parser.add_argument('--input_height', type=int, default=1088, help='input image height')
     parser.add_argument('--input_width', type=int, default=1920, help='input image width')
@@ -78,13 +79,15 @@ if __name__ == '__main__':
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             start_epoch = checkpoint.get('epoch', 0) + 1
             val_best_accuracy = checkpoint.get('best_accuracy', 0)
-            print(f"Resumed from epoch {start_epoch}, best_accuracy={val_best_accuracy:.4f}")
+            epochs_without_improvement = checkpoint.get('epochs_without_improvement', 0)
+            print(f"Resumed from epoch {start_epoch}, best_accuracy={val_best_accuracy:.4f}, no_improve_count={epochs_without_improvement}")
         else:
             # Old format - just model weights
             model.load_state_dict(checkpoint)
             print(f"Loaded model weights (old format), starting from epoch 0")
 
     val_best_accuracy = 0 if not args.resume else val_best_accuracy if 'val_best_accuracy' in dir() else 0
+    epochs_without_improvement = 0 if not args.resume else epochs_without_improvement if 'epochs_without_improvement' in dir() else 0
     for epoch in range(start_epoch, args.num_epochs):
         train_loss = train(model, train_loader, optimizer, criterion, device, epoch, args.steps_per_epoch)
         log_writer.add_scalar('Train/training_loss', train_loss, epoch)
@@ -103,19 +106,30 @@ if __name__ == '__main__':
             log_writer.add_scalar('Val/accuracy', accuracy, epoch)
             if accuracy > val_best_accuracy:
                 val_best_accuracy = accuracy
+                epochs_without_improvement = 0
                 torch.save({
                     'epoch': epoch,
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
                     'best_accuracy': val_best_accuracy,
+                    'epochs_without_improvement': epochs_without_improvement,
                 }, model_best_path)
                 print(f'  New best model saved! accuracy={accuracy:.4f}')
+            else:
+                epochs_without_improvement += args.val_intervals
+                print(f'  No improvement. Patience: {epochs_without_improvement}/{args.patience}')
+                
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'best_accuracy': val_best_accuracy,
+                'epochs_without_improvement': epochs_without_improvement,
             }, model_last_path)
+            
+            if epochs_without_improvement >= args.patience:
+                print(f"\nEarly stopping triggered at epoch {epoch} (no improvement for {epochs_without_improvement} epochs).")
+                break
 
     print(f"\n=== Training Complete ===")
     print(f"Best accuracy: {val_best_accuracy:.4f}")

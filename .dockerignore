@@ -1,0 +1,28 @@
+# flyctl launch added from .gitignore
+# Data & models
+**/*.pt
+**/data
+**/court-keypoints-dataset
+
+# Python
+**/__pycache__
+**/*.pyc
+**/.venv
+
+# IDE
+**/.vscode
+**/.idea
+
+# OS
+**/.DS_Store
+
+# Tensorboard
+**/exps/*/plots
+
+# Temp
+**/*.log
+
+# flyctl launch added from .venv/.gitignore
+# Created by venv; see https://docs.python.org/3/library/venv.html
+.venv/**/*
+fly.toml
