@@ -6,41 +6,50 @@ import numpy as np
 import cv2
 
 
-def compute_homography(detected_corners, output_size=(500, 1000)):
+def compute_homography(detected_points, output_size=(500, 1000)):
     """
-    Compute homography matrix from detected corners to top-down rectangular view.
+    Compute homography matrix from detected keypoints to top-down rectangular view.
+    Can compute from ANY 4 or more valid keypoints (corners + anchors).
     
     Args:
-        detected_corners: List of 4 (x, y) tuples in order [tol, tor, point_7, point_9]
-                         Any can be None if not detected.
+        detected_points: List of up to 6 (x, y) tuples:
+                        [tol, tor, point_7, point_9, top_t, bottom_t]
+                        Any can be None if not detected.
         output_size: (width, height) of output image
     
     Returns:
-        Homography matrix (3x3) or None if not enough points detected
+        Homography matrix (3x3), status, or (None, None) if not enough points
     """
-    # Check we have all 4 corners
-    if any(c is None for c in detected_corners):
-        return None
-    
     output_w, output_h = output_size
     
-    # Source points (detected in image)
-    src_pts = np.array(detected_corners, dtype=np.float32)
-    
-    # Destination points (output pixel coordinates)
-    # detected[0] = tol (far-left in camera) -> bottom-left of output
-    # detected[1] = tor (far-right in camera) -> bottom-right of output
-    # detected[2] = point_7 (near-left in camera) -> top-left of output
-    # detected[3] = point_9 (near-right in camera) -> top-right of output
-    dst_pts = np.array([
-        [0, output_h],           # tol -> bottom-left
-        [output_w, output_h],    # tor -> bottom-right
-        [0, 0],                  # point_7 -> top-left
-        [output_w, 0]            # point_9 -> top-right
+    # Destination points in top-down pixels
+    dst_coords = np.array([
+        [0, output_h],           # 0: tol (bottom-left)
+        [output_w, output_h],    # 1: tor (bottom-right)
+        [0, 0],                  # 2: point_7 (top-left)
+        [output_w, 0],           # 3: point_9 (top-right)
+        [output_w // 2, output_h], # 4: top_t (bottom-center)
+        [output_w // 2, 0]       # 5: bottom_t (top-center)
     ], dtype=np.float32)
+
+    src_pts = []
+    dst_pts = []
     
-    # Compute homography
-    H, status = cv2.findHomography(src_pts, dst_pts)
+    for i in range(min(len(detected_points), len(dst_coords))):
+        if detected_points[i] is not None:
+            src_pts.append(detected_points[i])
+            dst_pts.append(dst_coords[i])
+            
+    if len(src_pts) < 4:
+        # Cannot solve 3x3 homography matrix with < 4 point correspondences
+        print(f"Homography failed: only {len(src_pts)} points available (need at least 4)")
+        return None
+
+    src_pts = np.array(src_pts, dtype=np.float32)
+    dst_pts = np.array(dst_pts, dtype=np.float32)
+    
+    # Compute homography with RANSAC for outlier robustness if we have surplus points
+    H, status = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
     
     return H
 

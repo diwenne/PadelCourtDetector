@@ -12,11 +12,11 @@ from tracknet import BallTrackerNet
 from postprocess import postprocess
 
 # Keypoint names for visualization
-KEYPOINT_NAMES = ['tol', 'tor', 'point_7', 'point_9']
-COLORS = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0)]  # BGR
+KEYPOINT_NAMES = ['tol', 'tor', 'point_7', 'point_9', 'top_t', 'bottom_t']
+COLORS = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (0, 200, 255), (200, 0, 255)]  # BGR
 
 
-def inference(model, img, device, input_size=(960, 540)):
+def inference(model, img, device, input_size=(960, 544)):
     """Run inference on single image."""
     h, w = img.shape[:2]
     
@@ -33,9 +33,9 @@ def inference(model, img, device, input_size=(960, 540)):
     
     # Extract keypoints from heatmaps
     keypoints = []
-    for i in range(4):  # 4 keypoints
-        hm = out[i]
-        kp = postprocess(hm)
+    for i in range(min(6, out.shape[0])):  # 6 channels
+        hm = (out[i] * 255).astype(np.uint8)
+        kp = postprocess(hm, scale=1)
         if kp[0] is not None:
             # Scale back to original image size
             x = int(kp[0] * w / input_size[0])
@@ -59,8 +59,8 @@ def draw_keypoints(img, keypoints, radius=8, thickness=2):
             cv2.putText(result, KEYPOINT_NAMES[i], (x + 10, y), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, thickness)
     
-    # Draw lines between keypoints if all are detected
-    if all(kp is not None for kp in keypoints):
+    # Draw lines between keypoints if corners are detected
+    if all(kp is not None for kp in keypoints[:4]):
         # Top line: tol-tor
         cv2.line(result, keypoints[0], keypoints[1], (255, 255, 255), 2)
         # Left line: tol-point_7
@@ -85,7 +85,7 @@ if __name__ == '__main__':
     print(f"Using device: {device}")
     
     # Load model
-    model = BallTrackerNet(out_channels=5)
+    model = BallTrackerNet(out_channels=6)
     ckpt = torch.load(args.model_path, map_location=device)
     if isinstance(ckpt, dict) and 'model_state_dict' in ckpt:
         model.load_state_dict(ckpt['model_state_dict'])

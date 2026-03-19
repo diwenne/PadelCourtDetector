@@ -22,13 +22,17 @@ if __name__ == '__main__':
     parser.add_argument('--num_epochs', type=int, default=100, help='total training epochs')
     parser.add_argument('--lr', type=float, default=1e-4, help='learning rate')
     parser.add_argument('--val_intervals', type=int, default=5, help='epochs between validation')
-    parser.add_argument('--patience', type=int, default=30, help='early stopping patience (in epochs)')
+    parser.add_argument('--patience', type=int, default=15, help='early stopping patience (in epochs)')
     parser.add_argument('--steps_per_epoch', type=int, default=500, help='steps per epoch')
     parser.add_argument('--input_height', type=int, default=1088, help='input image height')
     parser.add_argument('--input_width', type=int, default=1920, help='input image width')
     parser.add_argument('--resume', action='store_true', help='resume from last checkpoint')
     args = parser.parse_args()
     
+    # Force default LR to 3e-4 if not explicitly passed
+    if args.lr == 1e-4:
+        args.lr = 3e-4
+
     print("=== Padel Court Keypoint Detector Training ===")
     print(f"Experiment: {args.exp_id}")
     print(f"Batch size: {args.batch_size}, LR: {args.lr}")
@@ -52,11 +56,25 @@ if __name__ == '__main__':
         pin_memory=True
     )
 
-    # Model: 5 output channels (4 keypoints + 1 center)
-    model = BallTrackerNet(out_channels=5)
+    # Model: 6 output channels (4 keypoints + 2 T anchors)
+    model = BallTrackerNet(out_channels=6)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f"Using device: {device}")
     model = model.to(device)
+
+    # Load Pretrained Weights Fine-Tuning
+    if not args.resume:
+        pretrained_path = './exps/padel_v2/model_best.pt'
+        if os.path.exists(pretrained_path):
+            print(f"Fine-Tuning: Loading weights from {pretrained_path} (skipping final layer dimension mismatch)")
+            checkpoint = torch.load(pretrained_path, map_location=device)
+            state_dict = checkpoint['model_state_dict'] if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint else checkpoint
+            model_dict = model.state_dict()
+            # Filter out final layer weights where shapes mismatch (5 vs 6 channels)
+            filtered_dict = {k: v for k, v in state_dict.items() if k in model_dict and v.shape == model_dict[k].shape}
+            print(f"Successfully loaded {len(filtered_dict)} / {len(model_dict)} tensors.")
+            model_dict.update(filtered_dict)
+            model.load_state_dict(model_dict)
 
     # Setup experiment directory
     exps_path = './exps/{}'.format(args.exp_id)

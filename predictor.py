@@ -6,7 +6,7 @@ from postprocess import postprocess
 
 class PadelPredictor:
     def __init__(self, model_path, device=None):
-        self.kp_names = ['tol', 'tor', 'point_7', 'point_9', 'center']
+        self.kp_names = ['tol', 'tor', 'point_7', 'point_9', 'top_t', 'bottom_t']
         self.input_w, self.input_h = 1920, 1088
         self.scale = 2
         self.out_w, self.out_h = self.input_w // self.scale, self.input_h // self.scale
@@ -43,23 +43,49 @@ class PadelPredictor:
         
         # Postprocess
         results = []
-        for ch in range(min(4, pred.shape[0])):
+        detected_pts_tuple = []
+        for ch in range(pred.shape[0]):
             hm = (pred[ch] * 255).astype(np.uint8)
             x_out, y_out = postprocess(hm, scale=1)
             
             kp_info = {"name": self.kp_names[ch], "x": None, "y": None}
             if x_out is not None:
                 # Scale back to original image coords
-                kp_info["x"] = int(x_out * w / self.out_w)
-                kp_info["y"] = int(y_out * h / self.out_h)
+                x_scaled = int(x_out * w / self.out_w)
+                y_scaled = int(y_out * h / self.out_h)
+                kp_info["x"] = x_scaled
+                kp_info["y"] = y_scaled
+                detected_pts_tuple.append((x_scaled, y_scaled))
+            else:
+                detected_pts_tuple.append(None)
             
             results.append(kp_info)
             
+        # Try homography to infer missing points
+        if None in detected_pts_tuple and sum(p is not None for p in detected_pts_tuple) >= 4:
+            from homography_padel import compute_homography, warp_point_to_image
+            H = compute_homography(detected_pts_tuple)
+            if H is not None:
+                output_w, output_h = 500, 1000
+                dst_coords = [
+                    (0, output_h),
+                    (output_w, output_h),
+                    (0, 0),
+                    (output_w, 0),
+                    (output_w // 2, output_h),
+                    (output_w // 2, 0)
+                ]
+                for i, kp in enumerate(results):
+                    if kp["x"] is None:
+                        inferred = warp_point_to_image(dst_coords[i], H)
+                        if inferred is not None:
+                            kp["x"], kp["y"] = inferred
+                            
         return results
 
 if __name__ == "__main__":
     # Quick test
-    predictor = PadelPredictor('exps/padel_v2/model_best.onnx')
+    predictor = PadelPredictor('exps/padel_v3/model_best.onnx')
     dummy_img = np.zeros((1080, 1920, 3), dtype=np.uint8)
     res = predictor.predict(dummy_img)
     print(res)

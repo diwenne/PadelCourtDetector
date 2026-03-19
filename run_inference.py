@@ -15,8 +15,8 @@ from tracknet import BallTrackerNet
 from postprocess import postprocess
 
 # Keypoint config
-KP_NAMES = ['tol', 'tor', 'point_7', 'point_9', 'center']
-PRED_COLORS = [(255, 50, 50), (50, 255, 50), (50, 50, 255), (0, 220, 220), (220, 50, 220)]
+KP_NAMES = ['tol', 'tor', 'point_7', 'point_9', 'top_t', 'bottom_t']
+PRED_COLORS = [(255, 50, 50), (50, 255, 50), (50, 50, 255), (0, 220, 220), (220, 50, 220), (200, 200, 50)]
 GT_COLOR = (0, 200, 255)  # cyan-ish for ground truth
 
 # Must match train_padel.py
@@ -26,7 +26,7 @@ OUT_W, OUT_H = INPUT_W // SCALE, INPUT_H // SCALE  # 960 x 544
 
 
 def load_model(model_path, device):
-    model = BallTrackerNet(out_channels=5)
+    model = BallTrackerNet(out_channels=6)
     ckpt = torch.load(model_path, map_location=device)
     if isinstance(ckpt, dict) and 'model_state_dict' in ckpt:
         model.load_state_dict(ckpt['model_state_dict'])
@@ -52,7 +52,7 @@ def run_inference(model, img, device):
     pred = torch.sigmoid(out).cpu().numpy()[0]
 
     keypoints = []
-    for ch in range(min(5, pred.shape[0])):
+    for ch in range(min(6, pred.shape[0])):
         hm = (pred[ch] * 255).astype(np.uint8)
         x_out, y_out = postprocess(hm, scale=1)
         if x_out is not None:

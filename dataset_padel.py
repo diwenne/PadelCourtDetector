@@ -54,10 +54,9 @@ class PadelDataset(Dataset):
         inp = (img.astype(np.float32) / 255.)
         inp = np.rollaxis(inp, 2, 0)
 
-        # Create heatmaps for 4 keypoints + 1 center
-        hm_hp = np.zeros((self.num_joints+1, self.output_height, self.output_width), dtype=np.float32)
+        # Create heatmaps for 4 keypoints + 2 T points (Top/Bottom anchors)
+        hm_hp = np.zeros((self.num_joints+2, self.output_height, self.output_width), dtype=np.float32)
         draw_gaussian = draw_umich_gaussian
-
         # Scale keypoints from original image size to output size
         orig_width = self.data[index].get('size', [self.input_width, self.input_height])[0]
         orig_height = self.data[index].get('size', [self.input_width, self.input_height])[1]
@@ -74,17 +73,21 @@ class PadelDataset(Dataset):
             if 0 <= x_scaled <= self.output_width and 0 <= y_scaled <= self.output_height:
                 draw_gaussian(hm_hp[i], (x_scaled, y_scaled), self.hp_radius)
 
-        # Draw center point (intersection of diagonals: tol-point_9 and tor-point_7)
-        # kps[0]=tol, kps[1]=tor, kps[2]=point_7, kps[3]=point_9
+        # Draw Top T and Bottom T anchors
         try:
-            x_ct, y_ct = line_intersection(
-                (scaled_kps[0][0], scaled_kps[0][1], scaled_kps[3][0], scaled_kps[3][1]),  # tol to point_9
-                (scaled_kps[1][0], scaled_kps[1][1], scaled_kps[2][0], scaled_kps[2][1])   # tor to point_7
-            )
-            if 0 <= x_ct <= self.output_width and 0 <= y_ct <= self.output_height:
-                draw_gaussian(hm_hp[self.num_joints], (int(x_ct), int(y_ct)), self.hp_radius)
+            # Top T: Average of tol (0) and tor (1)
+            x_top = int((scaled_kps[0][0] + scaled_kps[1][0]) / 2)
+            y_top = int((scaled_kps[0][1] + scaled_kps[1][1]) / 2)
+            if 0 <= x_top <= self.output_width and 0 <= y_top <= self.output_height:
+                draw_gaussian(hm_hp[self.num_joints], (x_top, y_top), self.hp_radius)
+
+            # Bottom T: Average of point_7 (2) and point_9 (3)
+            x_bot = int((scaled_kps[2][0] + scaled_kps[3][0]) / 2)
+            y_bot = int((scaled_kps[2][1] + scaled_kps[3][1]) / 2)
+            if 0 <= x_bot <= self.output_width and 0 <= y_bot <= self.output_height:
+                draw_gaussian(hm_hp[self.num_joints + 1], (x_bot, y_bot), self.hp_radius)
         except:
-            pass  # Skip center if lines don't intersect
+            pass  # Skip if coordinates fail
         
         return inp, hm_hp, np.array(scaled_kps, dtype=int), img_name
 

@@ -27,7 +27,7 @@ RUN pip install --no-cache-dir \
 COPY exps/ /app/exps/
 
 # Copy necessary code files
-COPY app.py predictor.py tracknet.py postprocess.py utils.py ./
+COPY app.py predictor.py tracknet.py postprocess.py utils.py homography_padel.py ./
 
 EXPOSE 8000
 
