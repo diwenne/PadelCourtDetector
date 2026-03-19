@@ -41,11 +41,9 @@ pip install -r requirements.txt
 ```
 
 ### Pre-trained Weights
-Download the primary v3 weights from GCS and export into ONNX format for the API:
-```bash
-gsutil cp gs://clutch-research/padel-model/model_best.pt exps/padel_v3/model_best.pt
-python3 export_v3_onnx.py
-```
+Download the primary v3 weights from Google Drive to `exps/padel_v3/`:
+- **[Download model_best.pt (PyTorch)](https://drive.google.com/uc?export=download&id=1_h27hakOyMGu7UBv0OuKlShOVS8E5Ix5)**
+- **[Download model_best.onnx (ONNX API Format)](https://drive.google.com/uc?export=download&id=1qQhOGCz2vJrm4m3i6BY3VdKCJLgSLJDX)**
 
 ---
 
