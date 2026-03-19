@@ -25,7 +25,9 @@ Based on: [TennisCourtDetector](https://github.com/yastrebksv/TennisCourtDetecto
 ---
 
 ## Model Metadata
-- **Validation Accuracy**: 94.16% (@ Epoch ~104)
+- **Validation Accuracy @ 7px**: 94.16%
+- **Validation Accuracy @ 10px**: 96.92%
+- **Validation Accuracy @ 15px**: 98.46%
 - **Architecture**: Modified TrackNet (6-channel single-frame heatmap)
 
 ---
