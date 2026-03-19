@@ -7,8 +7,8 @@ Based on: [TennisCourtDetector](https://github.com/yastrebksv/TennisCourtDetecto
 ---
 
 ## Features
-- **4 Keypoint Corners**: `tol` (top-left), `tor` (top-right), `point_7` (bottom-left), `point_9` (bottom-right).
-- **Postprocessing**: Uses `sympy` line-intersections to extrapolate grid nodes.
+- **6 Keypoint Anchors**: `tol` (top-left), `tor` (top-right), `point_7` (bottom-left), `point_9` (bottom-right), `top_t` (middle-top T), `bottom_t` (middle-bottom T).
+- **Homography Inference**: Incorporates cv2 homography mathematically to extrapolate any missing or occluded points automatically if at least 4 valid anchors are found.
 - **ONNX Acceleration**: Uses `onnxruntime` with disabled memory arena limiters for deployment.
 
 ---
@@ -18,18 +18,15 @@ Based on: [TennisCourtDetector](https://github.com/yastrebksv/TennisCourtDetecto
 2. **Preprocess**: Resizes image to `960x544`, normalizes array to `[0, 1]`, and expands to batch dimensions.
 3. **Inference**: Runs via `onnxruntime.InferenceSession` across safe core buckets.
 4. **Postprocess**: Applies manual sigmoid layout, extracts heatmap maximum-peaks per channel.
-5. **Coordinate Scaling**: Adjusts prediction back into uploaded image dimensions.
-6. **Response**: Dispatches JSON coordinate coordinates list.
+5. **Homography Check**: Checks for missing keypoints. Solves transformation matrix via `cv2.findHomography` to infer missing `(x, y)` locations seamlessly.
+6. **Coordinate Scaling**: Adjusts prediction back into uploaded image dimensions.
+7. **Response**: Dispatches JSON coordinate coordinates list.
 
 ---
 
 ## Model Metadata
-- **Validation Accuracy**: 95.09% (@ 7px radius threshold)
-- **Validation Accuracy @ 10px**: 97.48%
-- **Validation Accuracy @ 15px**: 98.61%
-- **Training Duration**: 245 Epochs
-- **Dataset Volume**: ~38,200 frames
-- **Architecture**: Modified TrackNet (Single-frame heatmap)
+- **Validation Accuracy**: 94.16% (@ Epoch ~104)
+- **Architecture**: Modified TrackNet (6-channel single-frame heatmap)
 
 ---
 
@@ -42,8 +39,11 @@ pip install -r requirements.txt
 ```
 
 ### Pre-trained Weights
-Download the weights to `exps/padel_v2/model_best.onnx`:
-- **[Download model_best.onnx](https://drive.google.com/uc?export=download&id=1Yl1_x4uo_FVJmp2lD-MTG7CqEIJ10mL3)**
+Download the primary v3 weights from GCS and export into ONNX format for the API:
+```bash
+gsutil cp gs://clutch-research/padel-model/model.pt exps/padel_v3/model_best.pt
+python3 export_v3_onnx.py
+```
 
 ---
 
