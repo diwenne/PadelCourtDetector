@@ -21,7 +21,9 @@ class PadelDataset(Dataset):
 
         self.path_dataset = './data'
         self.path_images = os.path.join(self.path_dataset, 'images')
-        with open(os.path.join(self.path_dataset, 'data_{}.json'.format(mode)), 'r') as f:
+        json_path_v4 = os.path.join(self.path_dataset, 'data_{}_v4.json'.format(mode))
+        json_path_old = os.path.join(self.path_dataset, 'data_{}.json'.format(mode))
+        with open(json_path_v4 if os.path.exists(json_path_v4) else json_path_old, 'r') as f:
             self.data = json.load(f)
         print('mode = {}, len = {}'.format(mode, len(self.data)))
 
@@ -81,9 +83,13 @@ class PadelDataset(Dataset):
             if 0 <= x_top <= self.output_width and 0 <= y_top <= self.output_height:
                 draw_gaussian(hm_hp[self.num_joints], (x_top, y_top), self.hp_radius)
 
-            # Bottom T: Average of point_7 (2) and point_9 (3)
-            x_bot = int((scaled_kps[2][0] + scaled_kps[3][0]) / 2)
-            y_bot = int((scaled_kps[2][1] + scaled_kps[3][1]) / 2)
+            # Bottom T: Average of point_7 (2) and point_9 (3), or precomputed geometry
+            if 'bottom_t' in self.data[index] and self.data[index]['bottom_t'] is not None:
+                x_bot = int(self.data[index]['bottom_t'][0] * scale_x)
+                y_bot = int(self.data[index]['bottom_t'][1] * scale_y)
+            else:
+                x_bot = int((scaled_kps[2][0] + scaled_kps[3][0]) / 2)
+                y_bot = int((scaled_kps[2][1] + scaled_kps[3][1]) / 2)
             if 0 <= x_bot <= self.output_width and 0 <= y_bot <= self.output_height:
                 draw_gaussian(hm_hp[self.num_joints + 1], (x_bot, y_bot), self.hp_radius)
         except:

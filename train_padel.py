@@ -27,6 +27,7 @@ if __name__ == '__main__':
     parser.add_argument('--input_height', type=int, default=1088, help='input image height')
     parser.add_argument('--input_width', type=int, default=1920, help='input image width')
     parser.add_argument('--resume', action='store_true', help='resume from last checkpoint')
+    parser.add_argument('--model_path', type=str, default='', help='pretrained weights path for fine-tuning')
     args = parser.parse_args()
     
     # Force default LR to 3e-4 if not explicitly passed
@@ -64,8 +65,8 @@ if __name__ == '__main__':
 
     # Load Pretrained Weights Fine-Tuning
     if not args.resume:
-        pretrained_path = './exps/padel_v2/model_best.pt'
-        if os.path.exists(pretrained_path):
+        pretrained_path = args.model_path if args.model_path else './exps/padel_v2/model_best.pt'
+        if pretrained_path and os.path.exists(pretrained_path):
             print(f"Fine-Tuning: Loading weights from {pretrained_path} (skipping final layer dimension mismatch)")
             checkpoint = torch.load(pretrained_path, map_location=device)
             state_dict = checkpoint['model_state_dict'] if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint else checkpoint
