@@ -1,6 +1,33 @@
 """
-Homography computation for padel court using 4 corner keypoints.
-Computes perspective transform from detected corners to standard court view.
+Homography computation for padel court keypoint detection.
+
+Maps detected image keypoints to a canonical top-down court view (500×1000 px)
+using perspective transformation. Supports graceful degradation: if any keypoint
+is missing but ≥4 are detected, homography is still computed and the missing
+point(s) can be recovered via inverse projection.
+
+Point mapping (image → top-down court):
+    Index 0: tol       → (0, 1000)       bottom-left
+    Index 1: tor       → (500, 1000)     bottom-right
+    Index 2: point_7   → (0, 0)          top-left
+    Index 3: point_9   → (500, 0)        top-right
+    Index 4: tom       → (250, 1000)     bottom-center
+    Index 5: bottom_t  → (250, 0)        top-center
+
+Homography requires a minimum of 4 point correspondences to solve the 3×3
+matrix (8 degrees of freedom). With 5-6 points, RANSAC is used for
+outlier robustness and least-squares refinement.
+
+Key functions:
+    - compute_homography: Build H matrix from detected → court point pairs
+    - warp_image_to_court: Produce a top-down warped court image
+    - warp_point_to_court: Transform image coords → court coords via H
+    - warp_point_to_image: Transform court coords → image coords via H⁻¹
+      (used to recover missing keypoints)
+
+Used by:
+    - predictor.py (production API: infer missing keypoints)
+    - tools/infer_padel_homography.py (visualization)
 """
 import numpy as np
 import cv2
@@ -54,18 +81,28 @@ def compute_homography(detected_points, output_size=(500, 1000)):
     return H
 
 
+
 def warp_image_to_court(img, detected_corners, output_size=(500, 1000), draw_lines=True):
-    """
-    Warp input image to top-down court view using detected corners.
+    """Warp input image to a top-down court view using detected keypoints.
+    
+    Applies perspective warp via the computed homography matrix. Optionally
+    overlays court lines (boundary, net, service lines, center line) on the
+    warped output for visualization.
     
     Args:
-        img: Input image (BGR)
-        detected_corners: List of 4 (x, y) tuples
-        output_size: (width, height) of output, defaults to 500x1000
-        draw_lines: Whether to draw court lines on output
+        img:               Input image (BGR, any size).
+        detected_corners:  List of up to 6 (x, y) tuples (see compute_homography).
+        output_size:       (width, height) of top-down output (default: 500×1000).
+        draw_lines:        Whether to overlay court line markings (default: True).
     
     Returns:
-        Warped image showing top-down court view, or None if homography failed
+        np.ndarray: Warped BGR image of shape (height, width, 3), or None
+                    if homography computation failed.
+    
+    Court line positions (official FIP regulations):
+        - Net line: center of court (50% of height)
+        - Service lines: 6.95m from net = 34.75% of court length
+        - Center service line: vertical, between service lines
     """
     H = compute_homography(detected_corners, output_size)
     if H is None:
@@ -92,8 +129,20 @@ def warp_image_to_court(img, detected_corners, output_size=(500, 1000), draw_lin
     return warped
 
 
+
 def warp_point_to_court(point, H):
-    """Transform a point from image coordinates to court coordinates."""
+    """Transform a single point from image coordinates to court coordinates.
+    
+    Applies the homography matrix H to project an image-space point
+    into the canonical top-down court coordinate system.
+    
+    Args:
+        point: (x, y) in image pixel coordinates.
+        H:     3×3 homography matrix (image → court).
+    
+    Returns:
+        tuple: (x_court, y_court) in court coordinates, or None if H or point is None.
+    """
     if H is None or point is None:
         return None
     pt = np.array([[point[0], point[1], 1]], dtype=np.float32).T
@@ -102,8 +151,25 @@ def warp_point_to_court(point, H):
     return (result[0, 0], result[1, 0])
 
 
+
 def warp_point_to_image(point, H):
-    """Transform a point from court coordinates to image coordinates."""
+    """Transform a point from court coordinates back to image coordinates.
+    
+    Computes the inverse homography H⁻¹ and applies it to map a known
+    court-space position back to image pixel coordinates. This is the key
+    function for recovering missing keypoints.
+    
+    Example: If point_7 is not detected, pass its known court position
+    (0, 0) and the H matrix computed from the remaining 5 points to get
+    the estimated image position of point_7.
+    
+    Args:
+        point: (x, y) in court coordinates (e.g., (0, 0) for point_7).
+        H:     3×3 homography matrix (image → court). H⁻¹ is computed internally.
+    
+    Returns:
+        tuple: (x_image, y_image) as integers, or None if H or point is None.
+    """
     if H is None or point is None:
         return None
     H_inv = np.linalg.inv(H)

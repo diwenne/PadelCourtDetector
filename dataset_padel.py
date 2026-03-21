@@ -1,3 +1,35 @@
+"""
+PyTorch Dataset for padel court keypoint detection.
+
+Loads images and annotations from ./data/ directory. For each image, generates
+6-channel ground-truth heatmaps (one per keypoint) with 2D Gaussian blobs.
+
+Data format (data_train.json / data_val.json):
+    [
+        {
+            "id": "UUID_frame_01",        # Image filename (without extension)
+            "kps": [[x,y], ...],           # 4 corner keypoints: [tol, tor, point_7, point_9]
+            "size": [width, height],       # Original image dimensions
+            "bottom_t": [x, y]             # Optional precomputed bottom-T coordinate
+        }
+    ]
+
+Heatmap channels:
+    0: tol       — Top-left (far-side left corner)
+    1: tor       — Top-right (far-side right corner)
+    2: point_7   — Bottom-left (near-side left corner)
+    3: point_9   — Bottom-right (near-side right corner)
+    4: tom       — Top-middle (dynamically computed as midpoint of tol + tor)
+    5: bottom_t  — Bottom-middle T-junction (precomputed or midpoint of point_7 + point_9)
+
+The dataset automatically handles:
+    - Image resizing to output dimensions (input_size / scale)
+    - Keypoint coordinate scaling from original to output resolution
+    - Gaussian heatmap generation with configurable radius
+    - Dynamic T-anchor computation from corner coordinates
+    - Support for both .jpg and .png image formats
+    - Automatic v4 dataset fallback (data_train_v4.json if available)
+"""
 from torch.utils.data import Dataset
 import os
 import cv2
@@ -6,9 +38,29 @@ import json
 from utils import draw_umich_gaussian, line_intersection, is_point_in_image
 
 class PadelDataset(Dataset):
-    """Dataset for padel court keypoint detection (4 keypoints)."""
+    """PyTorch Dataset for padel court keypoint detection.
+    
+    Produces 6-channel heatmaps: 4 annotated corners + 2 dynamically computed
+    T-junction anchor points (tom, bottom_t).
+    
+    The dataset supports automatic version fallback: if data_{mode}_v4.json exists,
+    it is used instead of data_{mode}.json.
+    """
     
     def __init__(self, mode, input_height=1088, input_width=1920, scale=2, hp_radius=55):
+        """Initialize the padel court dataset.
+        
+        Args:
+            mode:         'train' or 'val'.
+            input_height: Full input image height before scaling (default: 1088).
+                          Must be divisible by 8 (3 pooling layers at 2× each).
+            input_width:  Full input image width before scaling (default: 1920).
+            scale:        Downscale factor for model input/output (default: 2).
+                          Output dims = input_dims / scale = 960×544.
+            hp_radius:    Gaussian heatmap radius in pixels at output resolution
+                          (default: 55). Controls the spread of the target Gaussian.
+                          Sigma = diameter / 6 = (2*55+1) / 6 ≈ 18.5px.
+        """
         self.mode = mode
         assert mode in ['train', 'val'], 'incorrect mode'
         self.input_height = input_height
@@ -38,6 +90,26 @@ class PadelDataset(Dataset):
         return new_data
 
     def __getitem__(self, index):
+        """Load one sample: image + 6-channel heatmap + scaled keypoints.
+        
+        Returns:
+            tuple: (inp, hm_hp, scaled_kps, img_name)
+                - inp:        (3, out_H, out_W) float32 array, normalized [0, 1], CHW.
+                - hm_hp:      (6, out_H, out_W) float32 heatmap array with Gaussians.
+                - scaled_kps: (4, 2) int array of [x, y] keypoints at output resolution.
+                - img_name:   str, image identifier (without extension).
+        
+        Scaling logic:
+            Original image coords → output resolution coords using:
+                scale_x = output_width / original_width
+                scale_y = output_height / original_height
+        
+        T-anchor computation:
+            - tom (channel 4): midpoint of scaled tol and tor.
+            - bottom_t (channel 5): uses precomputed 'bottom_t' field from
+              annotation if available, otherwise falls back to midpoint of
+              scaled point_7 and point_9.
+        """
         # Support both .jpg and .png
         img_name = self.data[index]['id']
         kps = self.data[index]['kps']

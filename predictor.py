@@ -1,3 +1,29 @@
+"""
+Production ONNX inference wrapper for padel court keypoint detection.
+
+This is the primary inference module used by the FastAPI app (app.py).
+It loads an ONNX model, runs inference on a single image, and returns
+6 keypoint predictions with automatic homography fallback for any
+missing keypoints.
+
+Inference pipeline:
+    1. Resize input image to 960×544 (output_width × output_height)
+    2. Normalize to [0, 1], convert to CHW layout, add batch dimension
+    3. Run ONNX inference (CPU provider)
+    4. Apply sigmoid manually in numpy: 1/(1+exp(-x))
+    5. Per-channel: multiply by 255, cast to uint8, run HoughCircles
+    6. Scale detected coordinates back to original image dimensions
+    7. If any keypoints are missing but ≥4 detected, use homography
+       to infer the missing ones via inverse projection
+
+ONNX session configuration:
+    - CPU memory arena disabled (prevents 1.9GB RAM spike on shared VMs)
+    - 8 intra/inter-op threads for parallel execution
+    - CPUExecutionProvider only (no GPU required for inference)
+
+Used by:
+    - app.py (FastAPI production server)
+"""
 import cv2
 import numpy as np
 import os
@@ -5,7 +31,28 @@ import onnxruntime as ort
 from postprocess import postprocess
 
 class PadelPredictor:
+    """ONNX-based padel court keypoint predictor with homography fallback.
+    
+    Loads a pre-exported ONNX model and provides a single `predict()` method
+    that returns 6 keypoints per image. Missing keypoints are automatically
+    inferred using homography when ≥4 other points are detected.
+    
+    Attributes:
+        kp_names:    List of 6 keypoint names in channel order.
+        input_w/h:   Full input resolution (1920×1088).
+        scale:       Downscale factor (2), so actual model input = 960×544.
+        out_w/h:     Model input/output resolution (960×544).
+        sess:        ONNX InferenceSession.
+        input_name:  ONNX input tensor name.
+        output_name: ONNX output tensor name.
+    """
     def __init__(self, model_path, device=None):
+        """Initialize the predictor with an ONNX model.
+        
+        Args:
+            model_path: Path to the .onnx model file.
+            device:     Unused (kept for API compatibility). Always uses CPU.
+        """
         self.kp_names = ['tol', 'tor', 'point_7', 'point_9', 'tom', 'bottom_t']
         self.input_w, self.input_h = 1920, 1088
         self.scale = 2
@@ -23,9 +70,22 @@ class PadelPredictor:
         self.output_name = self.sess.get_outputs()[0].name
 
     def predict(self, img):
-        """
-        Run inference on an OpenCV image (BGR).
-        Returns a list of dictionaries with keypoint names and coordinates.
+        """Run inference on a single OpenCV image (BGR).
+        
+        Full pipeline: preprocess → ONNX inference → sigmoid → postprocess
+        → scale to original coords → homography fallback for missing points.
+        
+        Args:
+            img: OpenCV BGR image of any size (H, W, 3).
+        
+        Returns:
+            list[dict]: 6 dictionaries, each with keys:
+                - 'name': Keypoint name (str)
+                - 'x': X coordinate in original image pixels (int or None)
+                - 'y': Y coordinate in original image pixels (int or None)
+                
+                If a keypoint is not detected and cannot be inferred via
+                homography, x and y will be None.
         """
         h, w = img.shape[:2]
         

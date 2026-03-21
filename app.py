@@ -1,17 +1,11 @@
-print("DEBUG: app.py top-start", flush=True)
 from fastapi import FastAPI, File, UploadFile, HTTPException
-print("DEBUG: fastapi imported", flush=True)
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-print("DEBUG: uvicorn imported", flush=True)
 import cv2
-print("DEBUG: cv2 imported", flush=True)
 import numpy as np
 import io
 import os
-print("DEBUG: standard modules imported", flush=True)
 from predictor import PadelPredictor
-print("DEBUG: predictor imported", flush=True)
 
 app = FastAPI(
     title="Padel Court Detector API",

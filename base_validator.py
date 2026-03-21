@@ -1,3 +1,19 @@
+"""
+Validation loop for heatmap regression keypoint detection.
+
+Evaluates model predictions against ground-truth keypoints using a distance
+threshold (default: 7px at output resolution). Computes TP/FP/FN/TN metrics:
+
+    - TP: Predicted point is within `max_dist` pixels of ground truth
+    - FP: Predicted point exists but is >max_dist from GT, or GT is off-screen
+    - FN: No prediction but GT point exists on-screen
+    - TN: No prediction and no GT point on-screen (both off-screen)
+
+Accuracy = (TP + TN) / (TP + TN + FP + FN)
+Precision = TP / (TP + FP)
+
+Called by train_padel.py every `val_intervals` epochs.
+"""
 import torch
 import numpy as np
 import torch.nn.functional as F
@@ -9,6 +25,34 @@ import argparse
 import torch.nn as nn
 
 def val(model, val_loader, criterion, device, epoch, output_width=1280, output_height=720, max_dist=7):
+    """Run validation over entire val set and compute keypoint detection metrics.
+    
+    For each keypoint in each sample, the predicted heatmap is postprocessed
+    (threshold + HoughCircles) to extract (x, y). This is compared against the
+    ground-truth keypoint coordinate using Euclidean distance.
+    
+    Args:
+        model:         BallTrackerNet instance.
+        val_loader:    PyTorch DataLoader for validation set.
+        criterion:     Loss function (nn.MSELoss).
+        device:        'cuda' or 'cpu'.
+        epoch:         Current epoch number (for logging).
+        output_width:  Width of the output heatmap (default: 1280, padel uses 960).
+        output_height: Height of the output heatmap (default: 720, padel uses 544).
+        max_dist:      Maximum pixel distance for a prediction to be considered
+                       a true positive (default: 7px).
+    
+    Returns:
+        tuple: (mean_loss, tp, fp, fn, tn, precision, accuracy)
+            - mean_loss: Average MSE loss across all validation batches.
+            - tp/fp/fn/tn: Cumulative counts across all keypoints and samples.
+            - precision: TP / (TP + FP).
+            - accuracy: (TP + TN) / (TP + TN + FP + FN).
+    
+    Note:
+        Metrics are cumulative across ALL keypoints (including tom/bottom_t
+        anchor channels) and ALL samples in the validation set.
+    """
     model.eval()
     losses = []
     tp, fp, fn, tn = 0, 0, 0, 0
