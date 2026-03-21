@@ -3,8 +3,14 @@ import torch
 from tracknet import BallTrackerNet
 import os
 
-model_path = 'exps/padel_v3/model_best.pt'
-output_onnx = 'exps/padel_v3/model_best.onnx'
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument('--model_path', type=str, default='exps/padel_v3/model_best.pt')
+parser.add_argument('--output_onnx', type=str, default='exps/padel_v3/model_best.onnx')
+args = parser.parse_args()
+
+model_path = args.model_path
+output_onnx = args.output_onnx
 
 print("Loading padel_v3 model for JIT tracing...")
 model = BallTrackerNet(out_channels=6)

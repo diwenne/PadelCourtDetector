@@ -1,0 +1,26 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: check-cameras-moved
+spec:
+  schedule: "0 2 * * *"
+  timeZone: "America/New_York"
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 172800
+      activeDeadlineSeconds: 3600   # <-- hard stop after 1 hour
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: main
+              image: europe-west4-docker.pkg.dev/main-455618/eu-west4/camera-movement
+              imagePullPolicy: Always
+              command: ["python", "src/camera_keypoints_main.py"]
+              resources:
+                requests:
+                  cpu: "6"
+                  memory: "5Gi"
+                limits:
+                  cpu: "7"
+                  memory: "6Gi"

@@ -5,19 +5,17 @@ import cv2
 from predictor import PadelPredictor
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: python quick_detect.py <image_path>")
-        sys.exit(1)
-        
-    img_path = sys.argv[1]
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('img_path', type=str, help='Path to image')
+    parser.add_argument('--model_path', type=str, default='exps/padel_v3/model_best.onnx', help='Path to ONNX model')
+    args = parser.parse_args()
+    
+    img_path = args.img_path
+    model_path = args.model_path
     if not os.path.exists(img_path):
         print(f"Error: File {img_path} not found.")
         sys.exit(1)
-        
-    # Automatically find the latest model
-    model_path = 'exps/padel_v2/model_last.pt'
-    if not os.path.exists(model_path):
-        model_path = 'exps/padel_v1/model_last.pt'
         
     print(f"Loading model: {model_path}")
     predictor = PadelPredictor(model_path)

@@ -13,7 +13,7 @@ def compute_homography(detected_points, output_size=(500, 1000)):
     
     Args:
         detected_points: List of up to 6 (x, y) tuples:
-                        [tol, tor, point_7, point_9, top_t, bottom_t]
+                        [tol, tor, point_7, point_9, tom, bottom_t]
                         Any can be None if not detected.
         output_size: (width, height) of output image
     
@@ -28,7 +28,7 @@ def compute_homography(detected_points, output_size=(500, 1000)):
         [output_w, output_h],    # 1: tor (bottom-right)
         [0, 0],                  # 2: point_7 (top-left)
         [output_w, 0],           # 3: point_9 (top-right)
-        [output_w // 2, output_h], # 4: top_t (bottom-center)
+        [output_w // 2, output_h], # 4: tom (bottom-center)
         [output_w // 2, 0]       # 5: bottom_t (top-center)
     ], dtype=np.float32)
 

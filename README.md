@@ -7,7 +7,7 @@ Based on: [TennisCourtDetector](https://github.com/yastrebksv/TennisCourtDetecto
 ---
 
 ## Features
-- **6 Keypoint Anchors**: `tol` (top-left), `tor` (top-right), `point_7` (bottom-left), `point_9` (bottom-right), `top_t` (middle-top T), `bottom_t` (middle-bottom T).
+- **6 Keypoint Anchors**: `tol` (top-left), `tor` (top-right), `point_7` (bottom-left), `point_9` (bottom-right), `tom` (top-middle), `bottom_t` (bottom-middle T).
 - **Homography Inference**: Incorporates cv2 homography mathematically to extrapolate any missing or occluded points automatically if at least 4 valid anchors are found.
 - **ONNX Acceleration**: Uses `onnxruntime` with disabled memory arena limiters for deployment.
 

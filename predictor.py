@@ -6,7 +6,7 @@ from postprocess import postprocess
 
 class PadelPredictor:
     def __init__(self, model_path, device=None):
-        self.kp_names = ['tol', 'tor', 'point_7', 'point_9', 'top_t', 'bottom_t']
+        self.kp_names = ['tol', 'tor', 'point_7', 'point_9', 'tom', 'bottom_t']
         self.input_w, self.input_h = 1920, 1088
         self.scale = 2
         self.out_w, self.out_h = self.input_w // self.scale, self.input_h // self.scale

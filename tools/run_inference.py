@@ -16,7 +16,7 @@ from tracknet import BallTrackerNet
 from postprocess import postprocess
 
 # Keypoint config
-KP_NAMES = ['tol', 'tor', 'point_7', 'point_9', 'top_t', 'bottom_t']
+KP_NAMES = ['tol', 'tor', 'point_7', 'point_9', 'tom', 'bottom_t']
 PRED_COLORS = [(255, 50, 50), (50, 255, 50), (50, 50, 255), (0, 220, 220), (220, 50, 220), (200, 200, 50)]
 GT_COLOR = (0, 200, 255)  # cyan-ish for ground truth
 

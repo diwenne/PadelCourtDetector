@@ -75,9 +75,9 @@ class PadelDataset(Dataset):
             if 0 <= x_scaled <= self.output_width and 0 <= y_scaled <= self.output_height:
                 draw_gaussian(hm_hp[i], (x_scaled, y_scaled), self.hp_radius)
 
-        # Draw Top T and Bottom T anchors
+        # Draw Tom and Bottom T anchors
         try:
-            # Top T: Average of tol (0) and tor (1)
+            # Tom: Average of tol (0) and tor (1)
             x_top = int((scaled_kps[0][0] + scaled_kps[1][0]) / 2)
             y_top = int((scaled_kps[0][1] + scaled_kps[1][1]) / 2)
             if 0 <= x_top <= self.output_width and 0 <= y_top <= self.output_height:
