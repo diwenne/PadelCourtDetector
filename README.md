@@ -180,7 +180,7 @@ The model loads on startup (~2s). First request is instant after that.
 #### `GET /` — Health Check
 
 ```bash
-curl https://clutch-keypoint.fly.dev/
+curl -H "X-CALLER-ID: terminal" -H "X-API-KEY: dev_api_key" https://clutch-keypoint.fly.dev/
 ```
 
 Response:
@@ -197,7 +197,11 @@ Response:
 
 Send an image, get back 6 padel court keypoint coordinates.
 
-**Request**: `multipart/form-data` with a single field `file` containing the image (JPEG, PNG, or any format OpenCV can decode).
+**Request**: `multipart/form-data` with a single field `file` containing the image.
+
+**Headers**:
+- `X-CALLER-ID`: (Required) String to identify the client application/caller.
+- `X-API-KEY`: (Required) The whitelisted API Key for the environment.
 
 **Response fields**:
 
@@ -229,11 +233,19 @@ Send an image, get back 6 padel court keypoint coordinates.
 #### curl
 
 ```bash
-# Single image
-curl -X POST -F "file=@frame.png" https://clutch-keypoint.fly.dev/predict
+# Single image (Headers are required)
+curl -X POST \
+  -H "X-CALLER-ID: my-app" \
+  -H "X-API-KEY: dev_api_key" \
+  -F "file=@frame.png" \
+  https://clutch-keypoint.fly.dev/predict
 
 # Save response to file
-curl -s -X POST -F "file=@frame.png" https://clutch-keypoint.fly.dev/predict | jq . > result.json
+curl -s -X POST \
+  -H "X-CALLER-ID: my-app" \
+  -H "X-API-KEY: dev_api_key" \
+  -F "file=@frame.png" \
+  https://clutch-keypoint.fly.dev/predict | jq . > result.json
 ```
 
 #### Python (requests)
@@ -242,15 +254,23 @@ curl -s -X POST -F "file=@frame.png" https://clutch-keypoint.fly.dev/predict | j
 import requests
 
 url = "https://clutch-keypoint.fly.dev/predict"
-with open("frame.png", "rb") as f:
-    resp = requests.post(url, files={"file": f})
+headers = {
+    "X-CALLER-ID": "python-script",
+    "X-API-KEY": "dev_api_key"
+}
 
-data = resp.json()
-for kp in data["results"]:
-    if kp["x"] is not None:
-        print(f"{kp['name']}: ({kp['x']}, {kp['y']})")
-    else:
-        print(f"{kp['name']}: not detected")
+with open("frame.png", "rb") as f:
+    resp = requests.post(url, headers=headers, files={"file": f})
+
+if resp.status_code == 200:
+    data = resp.json()
+    for kp in data["results"]:
+        if kp["x"] is not None:
+            print(f"{kp['name']}: ({kp['x']}, {kp['y']})")
+        else:
+            print(f"{kp['name']}: not detected")
+else:
+    print(f"Error ({resp.status_code}): {resp.json()['detail']}")
 ```
 
 #### Python (batch processing)
@@ -260,12 +280,20 @@ import requests
 import glob
 
 url = "https://clutch-keypoint.fly.dev/predict"
+headers = {
+    "X-CALLER-ID": "batch-processor",
+    "X-API-KEY": "dev_api_key"
+}
 
 for img_path in glob.glob("frames/*.png"):
     with open(img_path, "rb") as f:
-        resp = requests.post(url, files={"file": f})
-    kps = {kp["name"]: (kp["x"], kp["y"]) for kp in resp.json()["results"]}
-    print(f"{img_path}: tol={kps['tol']}, tor={kps['tor']}")
+        resp = requests.post(url, headers=headers, files={"file": f})
+    
+    if resp.status_code == 200:
+        kps = {kp["name"]: (kp["x"], kp["y"]) for kp in resp.json()["results"]}
+        print(f"{img_path}: tol={kps['tol']}, tor={kps['tor']}")
+    else:
+        print(f"Failed {img_path}: {resp.status_code}")
 ```
 
 #### JavaScript (fetch)
@@ -276,14 +304,22 @@ formData.append("file", fileInput.files[0]);
 
 const resp = await fetch("https://clutch-keypoint.fly.dev/predict", {
   method: "POST",
+  headers: {
+    "X-CALLER-ID": "web-ui",
+    "X-API-KEY": "dev_api_key",
+  },
   body: formData,
 });
 const data = await resp.json();
 
-// data.results = [{name: "tol", x: 482, y: 312}, ...]
-data.results.forEach((kp) => {
-  console.log(`${kp.name}: (${kp.x}, ${kp.y})`);
-});
+if (resp.ok) {
+  // data.results = [{name: "tol", x: 482, y: 312}, ...]
+  data.results.forEach((kp) => {
+    console.log(`${kp.name}: (${kp.x}, ${kp.y})`);
+  });
+} else {
+  console.error("Auth error or invalid request", data);
+}
 ```
 
 ---
@@ -406,6 +442,32 @@ fly deploy
 - **VM**: 8 shared CPUs, 2 GB RAM
 - **Auto-stop**: Machines stop when idle, auto-start on request
 - **Min machines**: 1
+
+### Environment Variables & Secrets
+
+To secure the API in production with a custom `X-API-KEY`, you must set the `KEYPOINTS_API_KEY` secret on Fly.io:
+
+```bash
+fly secrets set KEYPOINTS_API_KEY="your_secure_api_key_here"
+```
+
+Once set, any client request to the production API will need to include the API key.
+If not set, it defaults to the `dev_api_key` placeholder specified in `app.py`.
+
+### Caller ID Validation (Optional)
+
+You can restrict which callers access the API using the `ALLOWED_CALLER_IDS` list in `app.py`.
+
+- **Current Behavior**: Set to empty `[]`. ANY non-empty `X-CALLER-ID` is accepted (as long as they have the correct API key).
+- **Restricted Behavior**: Add specific allowed titles to the list in `app.py`:
+  ```python
+  ALLOWED_CALLER_IDS = ["frontend", "dashboard", "mobile_app"]
+  ```
+
+If someone tries to send a request with a header like `-H "X-CALLER-ID: unknown"`, they will receive a `403 Forbidden` response.
+
+
+
 
 ### Dockerfile Notes
 
