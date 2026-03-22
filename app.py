@@ -25,23 +25,33 @@ app.add_middleware(
 # In production, the client will set the KEYPOINTS_API_KEY environment variable.
 EXPECTED_API_KEY = os.environ.get("KEYPOINTS_API_KEY", "dev_api_key")
 
+from typing import Optional
+
 # --- Optional: Whitelist of Allowed Callers ---
 # If this list is populated, ONLY the caller IDs listed here will be accepted.
 # Leave it empty `[]` if you want to allow ANY non-empty caller ID.
 ALLOWED_CALLER_IDS = [] 
 
 
-
 async def verify_auth(
-    x_caller_id: str = Header(..., alias="X-CALLER-ID", description="Identify the caller"),
-    x_api_key: str = Header(..., alias="X-API-KEY", description="The whitelisted API Key")
+    x_caller_id: Optional[str] = Header(None, alias="X-CALLER-ID", description="Identify the caller"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-KEY", description="The whitelisted API Key")
 ):
+    # 1. Check if headers are missing COMPLETELY
+    if x_api_key is None:
+        raise HTTPException(status_code=401, detail="Missing X-API-KEY header")
+    if x_caller_id is None:
+        raise HTTPException(status_code=401, detail="Missing X-CALLER-ID header")
+        
+    # 2. Check Key matches
     if x_api_key != EXPECTED_API_KEY:
         raise HTTPException(status_code=401, detail="Invalid API Key")
+    
+    # 3. Check ID is not empty or blank
     if not x_caller_id.strip():
         raise HTTPException(status_code=400, detail="X-CALLER-ID cannot be empty")
     
-    # Check against whitelist if it's set up
+    # 4. Check against whitelist if it's set up
     if ALLOWED_CALLER_IDS and x_caller_id not in ALLOWED_CALLER_IDS:
         raise HTTPException(status_code=403, detail=f"Caller ID '{x_caller_id}' is not authorized")
         
