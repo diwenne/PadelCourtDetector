@@ -5,7 +5,7 @@ import os
 import argparse
 from tracknet import BallTrackerNet
 from postprocess import postprocess
-from homography_padel import compute_homography, warp_point_to_image
+from padel.homography import compute_homography, warp_point_to_image
 
 # Keypoint names for visualization
 KEYPOINT_NAMES = ['tol', 'tor', 'point_7', 'point_9', 'tom', 'bottom_t']

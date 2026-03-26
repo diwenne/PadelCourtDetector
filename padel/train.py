@@ -4,7 +4,7 @@ Train padel court keypoint detector.
 Usage:
     python train_padel.py --exp_id padel_v1 --batch_size 4 --num_epochs 100
 """
-from dataset_padel import PadelDataset
+from padel.dataset import PadelDataset
 import torch
 import torch.nn as nn
 from base_trainer import train

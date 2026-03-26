@@ -1,6 +1,7 @@
-# Padel Court Keypoint Detector
+# Clutch Court Keypoints
 
-Detects 6 keypoints on a padel court from broadcast video frames using a heatmap-regression CNN. Includes homography-based inference to recover any missing keypoints when at least 4 are detected.
+A multi-sport court keypoint detection system (Padel, Pickleball) using a heatmap-regression CNN. Includes homography-based inference to recover missing keypoints.
+
 
 Based on: [TennisCourtDetector](https://github.com/yastrebksv/TennisCourtDetector) by yastrebksv.
 
@@ -87,47 +88,31 @@ Active model: `exps/padel_v4/model_best.onnx`
 ## Project Structure
 
 ```
-PadelCourtDetector/
-├── app.py                    # FastAPI server (production)
-├── predictor.py              # ONNX inference wrapper (used by app.py)
-├── tracknet.py               # CNN architecture (encoder-decoder)
-├── postprocess.py            # Heatmap → (x,y) via HoughCircles
-├── homography_padel.py       # Homography computation & point warping
-├── court_reference_padel.py  # Padel court geometry (10m×20m, FIP regs)
-├── utils.py                  # Gaussian heatmap drawing, line intersection
-├── dataset_padel.py          # PyTorch Dataset for training
-├── train_padel.py            # Training loop with early stopping
-├── base_trainer.py           # Single-epoch train function
-├── base_validator.py         # Validation with TP/FP/FN metrics
-├── postprocess_padel.py      # Extended postprocessing (padel-specific)
+clutch-court-keypoints/
+├── app.py                    # Multi-sport FastAPI server
+├── predictor.py              # ONNX inference wrapper (sport-agnostic)
+├── tracknet.py               # CNN architecture
+├── postprocess.py            # Heatmap → (x,y) extraction
+├── homography.py             # Shared homography utilities
+├── court_reference.py        # Base court geometry classes
+├── utils.py                  # General utilities
 │
-├── tools/
-│   ├── prepare_padel_dataset.py  # Convert YAML annotations → JSON
-│   ├── export_v3_onnx.py         # Export PyTorch → ONNX
-│   ├── run_inference.py           # Batch inference on val set
-│   ├── infer_padel.py             # Standalone PyTorch inference
-│   ├── infer_padel_homography.py  # Inference + homography visualization
-│   ├── compare_models.py          # Compare predictions across versions
-│   ├── inspect_heatmap.py         # Debug: visualize raw heatmap output
-│   ├── quick_detect.py            # Quick single-image detection
-│   ├── precompute_dataset_t.py    # Precompute T-junction coords
-│   └── crop_bottom_t.py           # Crop & inspect bottom-T regions
+├── padel/                    # Padel-specific logic
+│   ├── court_reference.py    # Padel dimensions (10m x 20m)
+│   ├── dataset.py            # Padel dataset loader
+│   ├── train.py              # Padel-specific training loop
+│   └── tools/                # Padel dataset & inference tools
 │
-├── data/
-│   ├── images/                # Training/val images (gitignored)
-│   ├── data_train.json        # Training annotations
-│   ├── data_train_v4.json     # v4 training annotations
-│   └── data_val.json          # Validation annotations
+├── pickleball/               # Pickleball-specific logic
+│   ├── court_reference.py    # Pickleball dimensions
+│   └── dataset.py            # Pickleball dataset loader
 │
-├── exps/
-│   ├── padel_v1/ … padel_v4/  # Model checkpoints (.pt, .onnx)
-│
-├── Dockerfile                 # Production container (Python 3.10-slim)
-├── fly.toml                   # Fly.io deployment config
-├── requirements.txt           # Python dependencies
-├── .gitignore
-└── .dockerignore
+├── tools/                    # Shared tools (export, inspect, etc.)
+├── data/                     # Training/val data (gitignored)
+├── exps/                     # Model checkpoints (.pt, .onnx)
+└── Dockerfile                # Production container
 ```
+
 
 ---
 
@@ -141,7 +126,7 @@ PadelCourtDetector/
 
 ```bash
 git clone <repo-url>
-cd PadelCourtDetector
+cd clutch-court-keypoints
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```

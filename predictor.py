@@ -30,38 +30,30 @@ import os
 import onnxruntime as ort
 from postprocess import postprocess
 
-class PadelPredictor:
-    """ONNX-based padel court keypoint predictor with homography fallback.
+class CourtPredictor:
+    """ONNX-based court keypoint predictor with sport-specific configuration."""
     
-    Loads a pre-exported ONNX model and provides a single `predict()` method
-    that returns 6 keypoints per image. Missing keypoints are automatically
-    inferred using homography when ≥4 other points are detected.
-    
-    Attributes:
-        kp_names:    List of 6 keypoint names in channel order.
-        input_w/h:   Full input resolution (1920×1088).
-        scale:       Downscale factor (2), so actual model input = 960×544.
-        out_w/h:     Model input/output resolution (960×544).
-        sess:        ONNX InferenceSession.
-        input_name:  ONNX input tensor name.
-        output_name: ONNX output tensor name.
-    """
-    def __init__(self, model_path, device=None):
-        """Initialize the predictor with an ONNX model.
-        
-        Args:
-            model_path: Path to the .onnx model file.
-            device:     Unused (kept for API compatibility). Always uses CPU.
-        """
-        self.kp_names = ['tol', 'tor', 'point_7', 'point_9', 'tom', 'bottom_t']
+    def __init__(self, model_path, sport='padel'):
+        self.sport = sport
+        if sport == 'padel':
+            from padel.court_reference import PadelCourtReference
+            self.court_ref = PadelCourtReference()
+            self.kp_names = ['tol', 'tor', 'point_7', 'point_9', 'tom', 'bottom_t']
+        elif sport == 'pickleball':
+            from pickleball.court_reference import PickleballCourtReference
+            self.court_ref = PickleballCourtReference()
+            self.kp_names = ['tol', 'tor', 'bol', 'bor', 'tom', 'bom']
+        else:
+            raise ValueError(f"Unknown sport: {sport}")
+
         self.input_w, self.input_h = 1920, 1088
         self.scale = 2
         self.out_w, self.out_h = self.input_w // self.scale, self.input_h // self.scale
         
         # Initialize ONNX session
-        print(f"Initializing ONNX InferenceSession for {model_path}")
+        print(f"Initializing ONNX InferenceSession for {sport.upper()} model: {model_path}")
         sess_options = ort.SessionOptions()
-        sess_options.enable_cpu_mem_arena = False  # Critical for preventing 1.9GB RAM spike
+        sess_options.enable_cpu_mem_arena = False
         sess_options.intra_op_num_threads = 8
         sess_options.inter_op_num_threads = 8
         
@@ -70,23 +62,6 @@ class PadelPredictor:
         self.output_name = self.sess.get_outputs()[0].name
 
     def predict(self, img):
-        """Run inference on a single OpenCV image (BGR).
-        
-        Full pipeline: preprocess → ONNX inference → sigmoid → postprocess
-        → scale to original coords → homography fallback for missing points.
-        
-        Args:
-            img: OpenCV BGR image of any size (H, W, 3).
-        
-        Returns:
-            list[dict]: 6 dictionaries, each with keys:
-                - 'name': Keypoint name (str)
-                - 'x': X coordinate in original image pixels (int or None)
-                - 'y': Y coordinate in original image pixels (int or None)
-                
-                If a keypoint is not detected and cannot be inferred via
-                homography, x and y will be None.
-        """
         h, w = img.shape[:2]
         
         # Preprocess
@@ -97,47 +72,40 @@ class PadelPredictor:
         
         # Inference
         out = self.sess.run([self.output_name], {self.input_name: inp})[0]
-        
-        # Apply Sigmoid manually in numpy
         pred = 1 / (1 + np.exp(-out[0]))
         
         # Postprocess
         results = []
         detected_pts_tuple = []
-        for ch in range(pred.shape[0]):
+        for ch in range(len(self.kp_names)):
             hm = (pred[ch] * 255).astype(np.uint8)
             x_out, y_out = postprocess(hm, scale=1)
             
             kp_info = {"name": self.kp_names[ch], "x": None, "y": None}
             if x_out is not None:
-                # Scale back to original image coords
                 x_scaled = int(x_out * w / self.out_w)
                 y_scaled = int(y_out * h / self.out_h)
-                kp_info["x"] = x_scaled
-                kp_info["y"] = y_scaled
+                kp_info["x"], kp_info["y"] = x_scaled, y_scaled
                 detected_pts_tuple.append((x_scaled, y_scaled))
             else:
                 detected_pts_tuple.append(None)
-            
             results.append(kp_info)
             
         # Try homography to infer missing points
         if None in detected_pts_tuple and sum(p is not None for p in detected_pts_tuple) >= 4:
-            from homography_padel import compute_homography, warp_point_to_image
-            H = compute_homography(detected_pts_tuple)
+            from homography import compute_homography, warp_point_to_image
+            H = compute_homography(detected_pts_tuple, self.court_ref)
             if H is not None:
+                # Map reference points to visualization size (500x1000) for consistent projection
                 output_w, output_h = 500, 1000
-                dst_coords = [
-                    (0, output_h),
-                    (output_w, output_h),
-                    (0, 0),
-                    (output_w, 0),
-                    (output_w // 2, output_h),
-                    (output_w // 2, 0)
-                ]
+                ref_pts = np.array(self.court_ref.key_points, dtype=np.float32)
+                dst_coords_viz = np.zeros_like(ref_pts)
+                dst_coords_viz[:, 0] = ref_pts[:, 0] / self.court_ref.court_width * output_w
+                dst_coords_viz[:, 1] = ref_pts[:, 1] / self.court_ref.court_length * output_h
+
                 for i, kp in enumerate(results):
-                    if kp["x"] is None:
-                        inferred = warp_point_to_image(dst_coords[i], H)
+                    if kp["x"] is None and i < len(dst_coords_viz):
+                        inferred = warp_point_to_image(dst_coords_viz[i], H)
                         if inferred is not None:
                             kp["x"], kp["y"] = inferred
                             
@@ -145,7 +113,7 @@ class PadelPredictor:
 
 if __name__ == "__main__":
     # Quick test
-    predictor = PadelPredictor('exps/padel_v3/model_best.onnx')
+    predictor = CourtPredictor('exps/padel_v4/model_best.onnx', sport='padel')
     dummy_img = np.zeros((1080, 1920, 3), dtype=np.uint8)
     res = predictor.predict(dummy_img)
     print(res)

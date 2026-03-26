@@ -5,12 +5,12 @@ import cv2
 import numpy as np
 import io
 import os
-from predictor import PadelPredictor
+from predictor import CourtPredictor
 
 app = FastAPI(
-    title="Padel Court Detector API",
-    description="API for detecting padel court keypoints in broadcast video frames.",
-    version="1.0.0"
+    title="Clutch Court Keypoint Detector API",
+    description="Multi-sport API for detecting court keypoints (Padel, Pickleball).",
+    version="1.1.0"
 )
 
 # Enable CORS for web integration
@@ -57,34 +57,49 @@ async def verify_auth(
         
     return x_caller_id
 
+# --- Predictor Registry ---
+PREDICTORS = {}
+MODEL_CONFIGS = {
+    "padel": "exps/padel_v4/model_best.onnx",
+    "pickleball": "exps/pickleball_v1/model_best.onnx" # Placeholder until trained
+}
 
-
-# Initialize Predictor
-MODEL_PATH = 'exps/padel_v4/model_best.onnx'
-if not os.path.exists(MODEL_PATH):
-    # Fallback or error
-    MODEL_PATH = 'exps/padel_v4/model_best.onnx'
-
-predictor = None
-
-def get_predictor():
-    global predictor
-    if predictor is None:
-        print(f"Loading model from: {MODEL_PATH}")
-        predictor = PadelPredictor(MODEL_PATH)
-    return predictor
+def get_predictor_for_sport(sport: str):
+    if sport not in MODEL_CONFIGS:
+        raise HTTPException(status_code=400, detail=f"Sport '{sport}' not supported")
+    
+    if sport not in PREDICTORS:
+        model_path = MODEL_CONFIGS[sport]
+        if not os.path.exists(model_path):
+            if sport == "padel":
+                raise HTTPException(status_code=500, detail=f"Base Padel model not found at {model_path}")
+            # For pickleball, if model doesn't exist yet, we just return error
+            raise HTTPException(status_code=503, detail=f"Model for {sport} is still training or not deployed.")
+        
+        print(f"Loading {sport} model from: {model_path}")
+        PREDICTORS[sport] = CourtPredictor(model_path, sport=sport)
+    
+    return PREDICTORS[sport]
 
 @app.on_event("startup")
 async def startup():
-    print("Pre-loading model on startup...")
-    get_predictor()
+    print("Pre-loading models on startup...")
+    for sport, path in MODEL_CONFIGS.items():
+        if os.path.exists(path):
+            get_predictor_for_sport(sport)
 
 @app.get("/", dependencies=[Depends(verify_auth)])
 async def root():
-    return {"message": "Padel Court Detector API is running", "model": MODEL_PATH}
+    loaded = list(PREDICTORS.keys())
+    return {
+        "message": "Clutch Court Keypoint Detector API is running",
+        "loaded_models": loaded,
+        "available_configs": MODEL_CONFIGS
+    }
 
 @app.post("/predict")
 async def predict(
+    sport: str = "padel",
     file: UploadFile = File(...),
     caller_id: str = Depends(verify_auth)
 ):
@@ -102,12 +117,15 @@ async def predict(
     
     # Run prediction
     try:
-        pred = get_predictor()
-        results = pred.predict(img)
+        predictor = get_predictor_for_sport(sport)
+        results = predictor.predict(img)
         return {
             "filename": file.filename,
+            "sport": sport,
             "results": results
         }
+    except HTTPException as he:
+        raise he
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
 
