@@ -15,13 +15,13 @@ from tracknet import BallTrackerNet
 from base_trainer import train
 from base_validator import val
 
-def get_dataloader(sport, mode, batch_size, input_height, input_width):
+def get_dataloader(sport, mode, batch_size, input_height, input_width, hp_radius=55):
     if sport == 'padel':
         from padel.dataset import PadelDataset
-        dataset = PadelDataset(mode, input_height=input_height, input_width=input_width)
+        dataset = PadelDataset(mode, input_height=input_height, input_width=input_width, hp_radius=hp_radius)
     elif sport == 'pickleball':
         from pickleball.dataset import PickleballDataset
-        dataset = PickleballDataset(mode, input_height=input_height, input_width=input_width)
+        dataset = PickleballDataset(mode, input_height=input_height, input_width=input_width, hp_radius=hp_radius)
     else:
         raise ValueError(f"Unknown sport: {sport}")
 
@@ -42,6 +42,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=3e-4, help='learning rate')
     parser.add_argument('--val_intervals', type=int, default=5, help='epochs between validation')
     parser.add_argument('--patience', type=int, default=15, help='early stopping patience')
+    parser.add_argument('--hp_radius', type=int, default=55, help='Gaussian heatmap radius')
     parser.add_argument('--steps_per_epoch', type=int, default=500, help='steps per epoch')
     parser.add_argument('--input_height', type=int, default=1088, help='input image height')
     parser.add_argument('--input_width', type=int, default=1920, help='input image width')
@@ -53,8 +54,8 @@ if __name__ == '__main__':
     print(f"Experiment: {args.exp_id}, Batch size: {args.batch_size}, LR: {args.lr}")
     
     # Data loaders
-    train_loader = get_dataloader(args.sport, 'train', args.batch_size, args.input_height, args.input_width)
-    val_loader = get_dataloader(args.sport, 'val', args.batch_size, args.input_height, args.input_width)
+    train_loader = get_dataloader(args.sport, 'train', args.batch_size, args.input_height, args.input_width, args.hp_radius)
+    val_loader = get_dataloader(args.sport, 'val', args.batch_size, args.input_height, args.input_width, args.hp_radius)
 
     # Model: 6 output channels (4 keypoints + 2 midpoints)
     model = BallTrackerNet(out_channels=6)
@@ -85,6 +86,7 @@ if __name__ == '__main__':
 
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), args.lr, betas=(0.9, 0.999))
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=2)
 
     start_epoch = 0
     val_best_accuracy = 0
@@ -94,6 +96,8 @@ if __name__ == '__main__':
         checkpoint = torch.load(model_last_path, map_location=device)
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        if 'scheduler_state_dict' in checkpoint:
+            scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         start_epoch = checkpoint.get('epoch', 0) + 1
         val_best_accuracy = checkpoint.get('best_accuracy', 0)
         epochs_without_improvement = checkpoint.get('epochs_without_improvement', 0)
@@ -127,10 +131,13 @@ if __name__ == '__main__':
                     print(f"Early stopping at epoch {epoch}")
                     break
 
+            scheduler.step(accuracy)
+
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
                 'best_accuracy': val_best_accuracy,
                 'epochs_without_improvement': epochs_without_improvement,
             }, model_last_path)
