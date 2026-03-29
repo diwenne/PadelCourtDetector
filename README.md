@@ -131,12 +131,58 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Pre-trained Weights
+### Pre-trained Weights (GCS)
 
-Download the v4 weights to `exps/padel_v4/`:
+All model weights are stored in GCS under `gs://clutch-research/keypoint-models/`:
 
-- **[model_best.pt (PyTorch, 127 MB)](https://drive.google.com/uc?export=download&id=1_h27hakOyMGu7UBv0OuKlShOVS8E5Ix5)**
-- **[model_best.onnx (ONNX, 42 MB)](https://drive.google.com/uc?export=download&id=1qQhOGCz2vJrm4m3i6BY3VdKCJLgSLJDX)**
+```bash
+# Download padel model
+gsutil cp gs://clutch-research/keypoint-models/model_padel.pt exps/padel_v4/model_best.pt
+
+# Download pickleball model
+gsutil cp gs://clutch-research/keypoint-models/model_pickleball.pt exps/pickleball_transfer_v1/model_best.pt
+```
+
+Legacy Google Drive links (padel v4 only):
+- [model_best.pt (PyTorch, 127 MB)](https://drive.google.com/uc?export=download&id=1_h27hakOyMGu7UBv0OuKlShOVS8E5Ix5)
+- [model_best.onnx (ONNX, 42 MB)](https://drive.google.com/uc?export=download&id=1qQhOGCz2vJrm4m3i6BY3VdKCJLgSLJDX)
+
+---
+
+### GCS Assets
+
+All large assets (datasets, models, videos) are stored in the `clutch-research` GCS bucket (`gs://clutch-research/`).
+
+#### Models — `gs://clutch-research/keypoint-models/`
+
+| File | Sport | Accuracy | Description |
+|------|-------|----------|-------------|
+| `model_padel.pt` | Padel | 94.16% @7px | Best padel v4 model (6 keypoints) |
+| `model_padel_with_center.pt` | Padel | — | Padel model variant with center point |
+| `model_pickleball.pt` | Pickleball | 67.4% | Transfer-learned from padel, best pickleball model |
+
+#### Pickleball Dataset — `gs://clutch-research/pickleball-dataset/`
+
+| Path | Size | Description |
+|------|------|-------------|
+| `frames/` | 1.4 GB (~9,800 images) | Extracted frames organized by YouTube video ID. 100 frames per video, stratified sampling. |
+| `videos-eventdetection/` | 39 GB | Raw event detection video clips (not needed for keypoint training) |
+
+> **Annotations & pipeline code** for the pickleball dataset are on GitHub: [pickleball_keypoints_dataset](https://github.com/diwenne/pickleball_keypoints_dataset)
+
+#### Padel Dataset — `gs://clutch-research/court-keypoints-dataset/`
+
+The original padel training dataset (~25,000 images with YAML keypoint annotations).
+
+#### Quick Download (all models)
+
+```bash
+# All models
+gsutil -m cp gs://clutch-research/keypoint-models/* ./models/
+
+# Pickleball frames (for retraining)
+gsutil -m rsync -r gs://clutch-research/pickleball-dataset/frames/ ./data/pickleball/images/
+```
 
 ---
 
